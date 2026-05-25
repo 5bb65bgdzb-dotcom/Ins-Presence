@@ -41,6 +41,36 @@ CREATE TABLE IF NOT EXISTS agents (
   INDEX idx_departement (departement)
 );
 
+-- Table des directions
+CREATE TABLE IF NOT EXISTS directions (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  nom VARCHAR(150) NOT NULL,
+  description VARCHAR(255),
+  statut ENUM('actif', 'inactif') DEFAULT 'actif',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table des divisions
+CREATE TABLE IF NOT EXISTS divisions (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  nom VARCHAR(150) NOT NULL,
+  description VARCHAR(255),
+  direction_id INT,
+  statut ENUM('actif', 'inactif') DEFAULT 'actif',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (direction_id) REFERENCES directions(id) ON DELETE SET NULL
+);
+
+-- Table des bureaux
+CREATE TABLE IF NOT EXISTS bureaux (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  nom VARCHAR(150) NOT NULL,
+  localisation VARCHAR(150),
+  description VARCHAR(255),
+  statut ENUM('actif', 'inactif') DEFAULT 'actif',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Table de présence
 CREATE TABLE IF NOT EXISTS presences (
   id INT PRIMARY KEY AUTO_INCREMENT,

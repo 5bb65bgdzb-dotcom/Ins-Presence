@@ -42,8 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Erreur de sécurité.';
     } else {
         $presence_id = intval($_POST['presence_id'] ?? 0);
-        $heure_entree = $_POST['heure_entree'] ?? null;
-        $heure_sortie = $_POST['heure_sortie'] ?? null;
+        $heure_arrivee = $_POST['heure_entree'] ?? null;
+        $heure_depart = $_POST['heure_sortie'] ?? null;
         $statut = $_POST['statut'] ?? 'present';
         $observation = $_POST['observation'] ?? '';
         
@@ -53,45 +53,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Récupérer l'ancienne valeur pour l'audit
             $oldSql = "SELECT * FROM presences WHERE id = ?";
             $oldStmt = $conn->prepare($oldSql);
-            $oldStmt->bind_param('i', $presence_id);
-            $oldStmt->execute();
-            $oldData = $oldStmt->get_result()->fetch_assoc();
-            $oldStmt->close();
+            $oldData = null;
+            if ($oldStmt) {
+                $oldStmt->bind_param('i', $presence_id);
+                $oldStmt->execute();
+                $oldData = $oldStmt->get_result()->fetch_assoc();
+                $oldStmt->close();
+            }
             
             if (!$oldData) {
                 $error = 'Présence introuvable.';
             } else {
                 $sql = "UPDATE presences 
-                        SET heure_entree = ?, heure_sortie = ?, statut = ?, observation = ? 
+                        SET heure_entree = ?, heure_sortie = ?, statut = ?, observation = ?, modifie_par = ?
                         WHERE id = ?";
                 
                 $stmt = $conn->prepare($sql);
                 if ($stmt) {
-                    $stmt->bind_param('ssssi', $heure_entree, $heure_sortie, $statut, $observation, $presence_id);
+                    $stmt->bind_param('ssssii', $heure_arrivee, $heure_depart, $statut, $observation, $user['id'], $presence_id);
                     
                     if ($stmt->execute()) {
                         $success = MESSAGES['record_updated'];
                         
-                        // Enregistrer l'audit si la table existe
-                        $hasAuditTable = false;
+                        // Vérifier si la table audit_logs existe
                         $tableCheck = $conn->query("SHOW TABLES LIKE 'audit_logs'");
                         if ($tableCheck && $tableCheck->num_rows > 0) {
-                            $hasAuditTable = true;
-                        }
-                        if ($hasAuditTable) {
                             $auditSql = "INSERT INTO audit_logs (user_id, action, table_name, record_id, old_value, new_value) 
                                         VALUES (?, 'UPDATE', 'presences', ?, ?, ?)";
                             $auditStmt = $conn->prepare($auditSql);
                             if ($auditStmt) {
                                 $oldJson = json_encode($oldData);
-                                $newJson = json_encode(['heure_entree' => $heure_entree, 'heure_sortie' => $heure_sortie, 'statut' => $statut, 'observation' => $observation]);
+                                $newJson = json_encode([
+                                    'heure_entree' => $heure_arrivee,
+                                    'heure_sortie' => $heure_depart,
+                                    'statut' => $statut,
+                                    'observation' => $observation
+                                ]);
                                 $auditStmt->bind_param('iiss', $user['id'], $presence_id, $oldJson, $newJson);
                                 $auditStmt->execute();
+                                $auditStmt->close();
                             }
                         }
                         
                         // Rafraîchir la liste
-                        $result = $conn->query($sql = "SELECT p.*, a.matricule AS numero_agent, a.nom, a.prenom 
+                        $result = $conn->query("SELECT p.*, a.matricule AS matricule, a.nom, a.prenom 
                                 FROM presences p 
                                 JOIN agents a ON p.agent_id = a.id 
                                 ORDER BY p.date_presence DESC 
@@ -317,8 +322,8 @@ if (!isset($_SESSION['csrf_token'])) {
                     <tr>
                         <th>Agent</th>
                         <th>Date</th>
-                        <th>Arrivée</th>
-                        <th>Départ</th>
+                        <th>Entrée</th>
+                        <th>Sortie</th>
                         <th>Statut</th>
                         <th>Action</th>
                     </tr>
@@ -326,7 +331,7 @@ if (!isset($_SESSION['csrf_token'])) {
                 <tbody>
                     <?php foreach ($presences as $presence): ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($presence['numero_agent'] . ' - ' . $presence['nom'] . ' ' . $presence['prenom']); ?></td>
+                            <td><?php echo htmlspecialchars($presence['id'] . ' - ' . $presence['nom'] . ' ' . $presence['prenom']); ?></td>
                             <td><?php echo htmlspecialchars($presence['date_presence']); ?></td>
                             <td><?php echo htmlspecialchars($presence['heure_entree'] ?? '-'); ?></td>
                             <td><?php echo htmlspecialchars($presence['heure_sortie'] ?? '-'); ?></td>

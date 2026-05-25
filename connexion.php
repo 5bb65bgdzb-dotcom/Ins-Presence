@@ -236,7 +236,7 @@ $csrf_token = $_SESSION['csrf_token'];
         </form>
         
         <div class="forgot-password">
-            <a href="forgot_password.php">Mot de passe oublié?</a>
+            <!-- <a href="forgot_password.php">Mot de passe oublié?</a> -->
         </div>
         
         <div class="info-box">

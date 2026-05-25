@@ -23,7 +23,7 @@ $success = '';
 $users = [];
 
 // Récupérer les utilisateurs
-$result = $conn->query("SELECT id_user AS id, username, roles AS role, statut AS status FROM utilisateurs ORDER BY id_user DESC");
+$result = $conn->query("SELECT id_user, username, roles, statut FROM utilisateurs ORDER BY id_user DESC");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
         $users[] = $row;
@@ -36,22 +36,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $error = 'Erreur de sécurité.';
     } else {
         $username = trim($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $role = $_POST['role'] ?? 'employee';
+        $password = $_POST['password_user'] ?? '';
+        $role = $_POST['roles'] ?? 'employee';
         
         if (empty($username) || empty($password)) {
             $error = 'Tous les champs sont requis.';
         } else {
             $result = $auth->createUser([
                 'username' => $username,
-                'password' => $password,
-                'role' => $role
+                'password_user' => $password,
+                'roles' => $role
             ]);
             
             if ($result['success']) {
                 $success = $result['message'];
                 // Rafraîchir la liste
-                $result = $conn->query("SELECT id_user AS id, username, roles AS role, statut AS status FROM utilisateurs ORDER BY id_user DESC");
+                $result = $conn->query("SELECT id_user, username, roles, statut FROM utilisateurs ORDER BY id_user DESC");
                 $users = [];
                 while ($row = $result->fetch_assoc()) {
                     $users[] = $row;
@@ -68,8 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         $error = 'Erreur de sécurité.';
     } else {
-        $user_id = intval($_POST['user_id'] ?? 0);
-        $status = $_POST['status'] ?? 'actif';
+        $user_id = intval($_POST['id_user'] ?? 0);
+        $status = $_POST['statut'] ?? 'actif';
         
         $sql = "UPDATE utilisateurs SET statut = ? WHERE id_user = ?";
         $stmt = $conn->prepare($sql);
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($stmt->execute()) {
                 $success = 'Statut mise à jour avec succès.';
                 // Rafraîchir
-                $result = $conn->query("SELECT id_user AS id, username, roles AS role, statut AS status FROM utilisateurs ORDER BY id_user DESC");
+                $result = $conn->query("SELECT id_user, username, roles, statut FROM utilisateurs ORDER BY id_user DESC");
                 $users = [];
                 while ($row = $result->fetch_assoc()) {
                     $users[] = $row;
@@ -213,6 +213,23 @@ if (!isset($_SESSION['csrf_token'])) {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
         }
+
+        .secondary-btn {
+            display: inline-block;
+            margin-bottom: 20px;
+            background-color: #ffffff;
+            border: 1px solid #667eea;
+            color: #333;
+            padding: 10px 18px;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .secondary-btn:hover {
+            background-color: #667eea;
+            color: #ffffff;
+        }
         
         table {
             width: 100%;
@@ -273,6 +290,11 @@ if (!isset($_SESSION['csrf_token'])) {
     </nav>
     
     <div class="container">
+        <?php if (Auth::hasPermission('manage_agents')): ?>
+            <div style="margin-bottom: 20px;">
+                <a class="secondary-btn" href="gerer_agents.php">👤 Gérer Agents</a>
+            </div>
+        <?php endif; ?>
         <div class="card">
             <h1>Créer un Nouvel Utilisateur</h1>
             
@@ -290,20 +312,19 @@ if (!isset($_SESSION['csrf_token'])) {
                 
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="username">Nom d'utilisateur *</label>
+                        <label for="username">Nom module *</label>
                         <input type="text" id="username" name="username" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="password">Mot de passe *</label>
-                        <input type="password" id="password" name="password" required>
+                        <input type="password" id="password_user" name="password_user" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="role">Rôle *</label>
-                        <select id="role" name="role" required>
-                            <option value="employee">Employé</option>
-                            <option value="manager">Gestionnaire</option>
+                        <label for="roles">Compte *</label>
+                        <select id="roles" name="roles" required>
+                            <option value="employee">secteur</option>
                             <option value="admin">Administrateur</option>
                         </select>
                     </div>
@@ -312,35 +333,32 @@ if (!isset($_SESSION['csrf_token'])) {
                 <div class="form-group">
                     <label for="nom_complet">Nom Complet</label>
                     <input type="text" id="nom_complet" name="nom_complet">
-                </div>
-                
-                <button type="submit">Créer Utilisateur</button>
+                </div> 
+                <button type="submit">Créer utilisateur</button>
             </form>
         </div>
         
         <div class="card">
-            <h1>Liste des Utilisateurs</h1>
+            <h1>Liste des utilisateurs</h1>
             
             <table>
                 <thead>
                     <tr>
-                        <th>Nom d'utilisateur</th>
-                        <th>Rôle</th>
+                        <th>Nom module</th>
+                        <th>Compte</th>
                         <th>Statut</th>
-                        <th>Créé le</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($users as $u): ?>
                         <tr>
                             <td><?php echo htmlspecialchars($u['username']); ?></td>
-                            <td><?php echo ucfirst($u['role']); ?></td>
+                            <td><?php echo ucfirst($u['roles']); ?></td>
                             <td>
-                                <span class="status-badge status-<?php echo $u['status']; ?>">
-                                    <?php echo ucfirst($u['status']); ?>
+                                <span class="status-badge status-<?php echo $u['statut']; ?>">
+                                    <?php echo ucfirst($u['statut']); ?>
                                 </span>
                             </td>
-                            <td>--</td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

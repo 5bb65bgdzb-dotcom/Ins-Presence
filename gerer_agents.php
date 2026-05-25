@@ -13,7 +13,7 @@ if (!Auth::isAuthenticated() || !Auth::checkSessionTimeout()) {
     exit;
 }
 
-if (!Auth::hasPermission('manage_users')) {
+if (!Auth::hasPermission('manage_agents')) {
     Auth::accessDenied();
 }
 
@@ -22,17 +22,54 @@ $error = '';
 $success = '';
 $agents = [];
 $users = [];
+$directions = [];
+$divisions = [];
+$isAdmin = Auth::hasRole('admin');
 
-// Récupérer les utilisateurs pour affectation des agents
-$usersResult = $conn->query("SELECT id_user AS id, username FROM utilisateurs ORDER BY username");
-if ($usersResult) {
-    while ($row = $usersResult->fetch_assoc()) {
-        $users[] = $row;
+// Récupérer les directions
+$result = $conn->query("SELECT id, nom FROM directions ORDER BY nom");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $directions[] = $row;
     }
 }
 
-// Récupérer les agents
-$result = $conn->query("SELECT a.id, a.matricule AS numero_agent, a.nom, a.prenom, a.email, a.telephone, a.statut AS status, a.user_id, u.username AS owner_username FROM agents a LEFT JOIN utilisateurs u ON a.user_id = u.id_user ORDER BY a.nom, a.prenom");
+// Récupérer les divisions
+$result = $conn->query("SELECT id, nom FROM divisions ORDER BY nom");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $divisions[] = $row;
+    }
+}
+
+// Récupérer les utilisateurs pour affectation des agents
+if ($isAdmin) {
+    $usersResult = $conn->query("SELECT username, username FROM utilisateurs ORDER BY username");
+    if ($usersResult) {
+        while ($row = $usersResult->fetch_assoc()) {
+            $users[] = $row;
+        }
+    }
+} else {
+    $users[] = [
+        'id' => $user['id'],
+        'username' => $user['username'],
+    ];
+}
+
+// Récupérer les agents avec noms des directions et divisions
+if ($isAdmin) {
+    $result = $conn->query("SELECT a.id, a.matricule, a.nom, a.prenom, a.email, a.telephone, a.direction_id, a.division_id, a.statut, a.user_id, u.username AS owner_username, d.nom AS direction_nom, divs.nom AS division_nom FROM agents a LEFT JOIN utilisateurs u ON a.user_id = u.id_user LEFT JOIN directions d ON a.direction_id = d.id LEFT JOIN divisions divs ON a.division_id = divs.id ORDER BY a.nom, a.prenom");
+} else {
+    $stmt = $conn->prepare("SELECT a.id, a.matricule, a.nom, a.prenom, a.email, a.telephone, a.direction_id, a.division_id, a.statut, a.user_id, u.username AS owner_username, d.nom AS direction_nom, divs.nom AS division_nom FROM agents a LEFT JOIN utilisateurs u ON a.user_id = u.id_user LEFT JOIN directions d ON a.direction_id = d.id LEFT JOIN divisions divs ON a.division_id = divs.id WHERE a.user_id = ? ORDER BY a.nom, a.prenom");
+    if ($stmt) {
+        $stmt->bind_param('i', $user['id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+    } else {
+        $result = false;
+    }
+}
 if ($result) {
     while ($row = $result->fetch_assoc()) {
         $agents[] = $row;
@@ -44,21 +81,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         $error = 'Erreur de sécurité.';
     } else {
-        $numero_agent = trim($_POST['numero_agent'] ?? '');
+        $numero_agent = trim($_POST['matricule'] ?? '');
         $nom = trim($_POST['nom'] ?? '');
         $prenom = trim($_POST['prenom'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $telephone = trim($_POST['telephone'] ?? '');
-        $departement = trim($_POST['departement'] ?? '');
-        $poste = trim($_POST['poste'] ?? '');
+        $direction_id = intval($_POST['direction_id'] ?? 0);
+        $division_id = intval($_POST['division_id'] ?? 0);
         $date_embauche = $_POST['date_embauche'] ?? null;
-        $owner_user_id = intval($_POST['user_id'] ?? 0);
+        $owner_user_id = $isAdmin ? intval($_POST['user_id'] ?? 0) : $user['id'];
         
         if (empty($numero_agent) || empty($nom) || empty($prenom)) {
             $error = 'Les champs requis doivent être remplis.';
         } else {
             // Vérifier si l'agent existe déjà
-            $checkSql = "SELECT id FROM agents WHERE matricule = ?";
+            $checkSql = "SELECT user_id FROM agents WHERE matricule = ?";
             $checkStmt = $conn->prepare($checkSql);
             $checkStmt->bind_param('s', $numero_agent);
             $checkStmt->execute();
@@ -67,25 +104,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $error = 'Cet agent existe déjà.';
             } else {
                 if ($owner_user_id > 0) {
-                    $sql = "INSERT INTO agents (user_id, matricule, nom, prenom, email, telephone, date_embauche, statut) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, 'actif')";
+                    $sql = "INSERT INTO agents (user_id, matricule, nom, prenom, email, telephone, direction_id, division_id, date_embauche, statut) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'actif')";
                 } else {
-                    $sql = "INSERT INTO agents (matricule, nom, prenom, email, telephone, date_embauche, statut) 
-                            VALUES (?, ?, ?, ?, ?, ?, 'actif')";
+                    $sql = "INSERT INTO agents (matricule, nom, prenom, email, telephone, direction_id, division_id, date_embauche, statut) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'actif')";
                 }
                 
                 $stmt = $conn->prepare($sql);
                 if ($stmt) {
                     if ($owner_user_id > 0) {
-                        $stmt->bind_param('issssss', $owner_user_id, $numero_agent, $nom, $prenom, $email, $telephone, $date_embauche);
+                        $stmt->bind_param('isssssiis', $owner_user_id, $numero_agent, $nom, $prenom, $email, $telephone, $direction_id, $division_id, $date_embauche);
                     } else {
-                        $stmt->bind_param('ssssss', $numero_agent, $nom, $prenom, $email, $telephone, $date_embauche);
+                        $stmt->bind_param('sssssiis', $numero_agent, $nom, $prenom, $email, $telephone, $direction_id, $division_id, $date_embauche);
                     }
                     
                     if ($stmt->execute()) {
                         $success = 'Agent créé avec succès.';
-                        // Rafraîchir
-                        $result = $conn->query("SELECT a.id, a.matricule AS numero_agent, a.nom, a.prenom, a.email, a.telephone, a.statut AS status, a.user_id, u.username AS owner_username FROM agents a LEFT JOIN utilisateurs u ON a.user_id = u.id_user ORDER BY a.nom, a.prenom");
+                        if ($isAdmin) {
+                            $result = $conn->query("SELECT a.id, a.matricule, a.nom, a.prenom, a.email, a.telephone, a.direction_id, a.division_id, a.statut, a.user_id, u.username AS owner_username, d.nom AS direction_nom, divs.nom AS division_nom FROM agents a LEFT JOIN utilisateurs u ON a.user_id = u.id_user LEFT JOIN directions d ON a.direction_id = d.id LEFT JOIN divisions divs ON a.division_id = divs.id ORDER BY a.nom, a.prenom");
+                        } else {
+                            $refreshStmt = $conn->prepare("SELECT a.id, a.matricule, a.nom, a.prenom, a.email, a.telephone, a.direction_id, a.division_id, a.statut, a.user_id, u.username AS owner_username, d.nom AS direction_nom, divs.nom AS division_nom FROM agents a LEFT JOIN utilisateurs u ON a.user_id = u.id_user LEFT JOIN directions d ON a.direction_id = d.id LEFT JOIN divisions divs ON a.division_id = divs.id WHERE a.user_id = ? ORDER BY a.nom, a.prenom");
+                            if ($refreshStmt) {
+                                $refreshStmt->bind_param('i', $user['id']);
+                                $refreshStmt->execute();
+                                $result = $refreshStmt->get_result();
+                            } else {
+                                $result = false;
+                            }
+                        }
                         $agents = [];
                         while ($row = $result->fetch_assoc()) {
                             $agents[] = $row;
@@ -266,6 +313,24 @@ if (!isset($_SESSION['csrf_token'])) {
             background-color: #f8d7da;
             color: #721c24;
         }
+
+        .action-btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 13px;
+            color: white;
+            margin-right: 6px;
+        }
+
+        .edit-btn {
+            background-color: #3498db;
+        }
+
+        .delete-btn {
+            background-color: #e74c3c;
+        }
         
         @media (max-width: 768px) {
             .form-grid {
@@ -299,7 +364,7 @@ if (!isset($_SESSION['csrf_token'])) {
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="numero_agent">Numéro Agent *</label>
-                        <input type="text" id="numero_agent" name="numero_agent" required>
+                        <input type="text" id="numero_agent" name="matricule" required>
                     </div>
                     
                     <div class="form-group">
@@ -325,15 +390,25 @@ if (!isset($_SESSION['csrf_token'])) {
                     </div>
                     
                     <div class="form-group">
-                        <label for="departement">Département</label>
-                        <input type="text" id="departement" name="departement">
+                        <label for="direction_id">Direction</label>
+                        <select id="direction_id" name="direction_id">
+                            <option value="">-- Sélectionner une direction --</option>
+                            <?php foreach ($directions as $direction): ?>
+                                <option value="<?php echo intval($direction['id']); ?>"><?php echo htmlspecialchars($direction['nom']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                 </div>
                 
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="poste">Poste</label>
-                        <input type="text" id="poste" name="poste">
+                        <label for="division_id">Division</label>
+                        <select id="division_id" name="division_id">
+                            <option value="">-- Sélectionner une division --</option>
+                            <?php foreach ($divisions as $division): ?>
+                                <option value="<?php echo intval($division['id']); ?>"><?php echo htmlspecialchars($division['nom']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     
                     <div class="form-group">
@@ -341,15 +416,19 @@ if (!isset($_SESSION['csrf_token'])) {
                         <input type="date" id="date_embauche" name="date_embauche">
                     </div>
                     
+                    <?php if ($isAdmin): ?>
                     <div class="form-group">
                         <label for="user_id">Utilisateur responsable</label>
                         <select id="user_id" name="user_id">
                             <option value="">Aucun</option>
                             <?php foreach ($users as $u): ?>
-                                <option value="<?php echo $u['id']; ?>"><?php echo htmlspecialchars($u['username']); ?></option>
+                                <option value="<?php echo $u['username']; ?>"><?php echo htmlspecialchars($u['username']); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
+                <?php else: ?>
+                    
+                <?php endif; ?>
                 </div>
                 
                 <button type="submit">Créer Agent</button>
@@ -357,7 +436,7 @@ if (!isset($_SESSION['csrf_token'])) {
         </div>
         
         <div class="card">
-            <h1>Liste des Agents</h1>
+            <h1><?php echo $isAdmin ? 'Liste des Agents' : 'Mes Agents'; ?></h1>
             
             <table>
                 <thead>
@@ -366,26 +445,31 @@ if (!isset($_SESSION['csrf_token'])) {
                         <th>Nom</th>
                         <th>Prénom</th>
                         <th>Email</th>
-                        <th>Département</th>
-                        <th>Poste</th>
+                        <th>Direction</th>
+                        <th>Division</th>
                         <th>Responsable</th>
                         <th>Statut</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($agents as $a): ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($a['numero_agent']); ?></td>
+                            <td><?php echo htmlspecialchars($a['matricule']); ?></td>
                             <td><?php echo htmlspecialchars($a['nom']); ?></td>
                             <td><?php echo htmlspecialchars($a['prenom']); ?></td>
                             <td><?php echo htmlspecialchars($a['email'] ?? '-'); ?></td>
-                            <td><?php echo htmlspecialchars($a['departement'] ?? '-'); ?></td>
-                            <td><?php echo htmlspecialchars($a['poste'] ?? '-'); ?></td>
+                            <td><?php echo htmlspecialchars($a['direction_nom'] ?? '-'); ?></td>
+                            <td><?php echo htmlspecialchars($a['division_nom'] ?? '-'); ?></td>
                             <td><?php echo htmlspecialchars($a['owner_username'] ?? '-'); ?></td>
                             <td>
-                                <span class="status-badge status-<?php echo $a['status']; ?>">
-                                    <?php echo ucfirst($a['status']); ?>
+                                <span class="status-badge status-<?php echo $a['statut']; ?>">
+                                    <?php echo ucfirst($a['statut']); ?>
                                 </span>
+                            </td>
+                            <td>
+                                <a class="action-btn edit-btn" href="modifier_agent.php?id=<?php echo $a['id']; ?>">Modifier</a>
+                                <a class="action-btn delete-btn" href="supprimer_agent.php?id=<?php echo $a['id']; ?>">Supprimer</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

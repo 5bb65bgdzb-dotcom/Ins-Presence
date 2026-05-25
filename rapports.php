@@ -145,7 +145,7 @@ if ($rapportType === 'daily') {
         $params[] = $agentId;
     }
     
-    $sql .= " GROUP BY a.id, a.matricule, a.nom, a.prenom ORDER BY a.nom, a.prenom";
+    $sql .= " GROUP BY a.id, a.numero_agent, a.nom, a.prenom ORDER BY a.nom, a.prenom";
     
     $stmt = $conn->prepare($sql);
     $stmt->bind_param(str_repeat('s', count($params)), ...$params);
@@ -542,7 +542,7 @@ if ($rapportType === 'daily') {
                                         <td><?php echo htmlspecialchars($row['observation'] ?? '-'); ?></td>
                                     <?php elseif ($rapportType === 'retards'): ?>
                                         <td><?php echo $row['heure_entree'] ?? '-'; ?></td>
-                                        <td><?php echo $row['retard_minutes'] ?? 0; ?> min</td>
+                                        <td><?php echo $row['retard_sortie'] ?? 0; ?> min</td>
                                         <td><?php echo htmlspecialchars($row['observation'] ?? '-'); ?></td>
                                     <?php endif; ?>
                                 </tr>

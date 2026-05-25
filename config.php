@@ -19,17 +19,17 @@ define('ROLES', [
     'admin' => [
         'id' => 1,
         'nom' => 'Administrateur',
-        'permissions' => ['view_dashboard', 'manage_users', 'manage_attendance', 'view_reports', 'manage_roles', 'export_data']
+        'permissions' => ['view_dashboard', 'manage_users', 'manage_attendance', 'view_reports', 'manage_roles', 'export_data', 'manage_agents']
     ],
     'manager' => [
         'id' => 2,
         'nom' => 'Gestionnaire',
-        'permissions' => ['view_dashboard', 'manage_attendance', 'view_reports', 'export_data']
+        'permissions' => ['view_dashboard', 'manage_attendance', 'view_reports', 'export_data', 'manage_agents']
     ],
     'employee' => [
         'id' => 3,
         'nom' => 'Employé',
-        'permissions' => ['view_dashboard', 'view_own_attendance']
+        'permissions' => ['view_dashboard', 'view_own_attendance', 'manage_agents']
     ]
 ]);
 

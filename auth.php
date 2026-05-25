@@ -91,12 +91,12 @@ class Auth {
         }
         
         // Préparer la requête en utilisant les colonnes existantes dans la base de données
-        $idColumn = $this->getUtilisateurColumnName('id');
-        $passwordColumn = $this->getUtilisateurColumnName('password');
-        $roleColumn = $this->getUtilisateurColumnName('role');
-        $statusColumn = $this->getUtilisateurColumnName('status');
+        $idColumn = $this->getUtilisateurColumnName('id_user');
+        $passwordColumn = $this->getUtilisateurColumnName('password_user');
+        $roleColumn = $this->getUtilisateurColumnName('roles');
+        $statusColumn = $this->getUtilisateurColumnName('statut');
 
-        $sql = "SELECT {$idColumn} AS id, username, {$passwordColumn} AS password_hash, {$roleColumn} AS role, {$statusColumn} AS status 
+        $sql = "SELECT {$idColumn} AS id, username, {$passwordColumn} AS password_hash, {$roleColumn} AS roles, {$statusColumn} AS statut 
                 FROM utilisateurs 
                 WHERE username = ?
                 LIMIT 1";
@@ -125,7 +125,7 @@ class Auth {
         $user = $result->fetch_assoc();
         
         // Vérifier si l'utilisateur est actif
-        if ($user['status'] !== 'actif') {
+        if ($user['statut'] !== 'actif') {
             return ['success' => false, 'message' => 'Votre compte est désactivé.'];
         }
         
@@ -149,7 +149,7 @@ class Auth {
         }
         
         // Définir un rôle par défaut si la colonne est vide
-        $role = !empty($user['role']) ? $user['role'] : 'employee';
+        $role = !empty($user['roles']) ? $user['roles'] : 'employee';
         
         // Récréer l'ID de session pour éviter la fixation
         session_regenerate_id(true);
@@ -315,10 +315,10 @@ class Auth {
 
     private function getUtilisateurColumnName($logicalName) {
         $mapping = [
-            'id' => ['id', 'id_user'],
-            'password' => ['password_hash', 'password_user'],
+            'id' => ['id', 'id'],
+            'password_user' => ['password_hash', 'password_hash'],
             'role' => ['role', 'roles'],
-            'status' => ['status', 'statut'],
+            'statut' => ['statut', 'statut'],
         ];
 
         if (!isset($mapping[$logicalName])) {
@@ -360,7 +360,7 @@ class Auth {
         $idColumn = $this->getUtilisateurColumnName('id');
         $passwordColumn = $this->getUtilisateurColumnName('password');
         $roleColumn = $this->getUtilisateurColumnName('role');
-        $statusColumn = $this->getUtilisateurColumnName('status');
+        $statusColumn = $this->getUtilisateurColumnName('statut');
 
         $checkSql = "SELECT {$idColumn} FROM utilisateurs WHERE username = ?";
         $checkStmt = $this->conn->prepare($checkSql);

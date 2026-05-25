@@ -349,15 +349,15 @@ if ($agent_info) {
                 <div class="info-grid">
                     <div class="info-item">
                         <label>Numéro d'Agent</label>
-                        <p><?php echo htmlspecialchars($agent_info['numero_agent']); ?></p>
+                        <p><?php echo htmlspecialchars($agent_info['matricule']); ?></p>
                     </div>
                     <div class="info-item">
                         <label>Département</label>
-                        <p><?php echo htmlspecialchars($agent_info['departement'] ?: '-'); ?></p>
+                        <p><?php echo htmlspecialchars($agent_info['direction_id'] ?: '-'); ?></p>
                     </div>
                     <div class="info-item">
                         <label>Poste</label>
-                        <p><?php echo htmlspecialchars($agent_info['poste'] ?: '-'); ?></p>
+                        <p><?php echo htmlspecialchars($agent_info['division_id'] ?: '-'); ?></p>
                     </div>
                     <div class="info-item">
                         <label>Date d'embauche</label>
